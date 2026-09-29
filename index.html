@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lean Pro">
+<meta name="theme-color" content="#06080b">
+</head><body>
+<title>Lean Pro 125</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Semi+Condensed:wght@400;500;600;700&family=Saira:wght@400;500;600&display=swap">
+<style>
+/* Instrument cluster: dark TFT ground, condensed technical numerals, one blue accent, red only for high lean. Single dark look by design. */
+:root{
+  --bg:#06080b; --panel:#0b0f15; --panel2:#101621; --line:#1d2632; --line2:#2a3544;
+  --fg:#eef2f7; --mute:#7c8898; --accent:#2b7de9; --accent2:#7ab8ff; --hot:#ff3b30; --warm:#ffb020; --good:#39d98a;
+  --f-num:"Saira Semi Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;
+  --f-ui:"Saira","Helvetica Neue",Arial,system-ui,sans-serif;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+body{font-family:var(--f-ui);font-size:14px}
+#app{position:fixed;left:0;top:0;width:100vw;height:100vh;display:grid;gap:8px;
+  padding:max(10px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(10px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));
+  box-sizing:border-box;transform-origin:50% 50%;background:var(--bg)}
+#app.land{grid-template-columns:minmax(0,1fr) minmax(0,2.4fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-areas:"strip strip strip" "left center right" "zone zone ctrl"}
+#app.port{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto auto auto;
+  grid-template-areas:"strip strip" "center center" "left right" "zone zone" "ctrl ctrl"}
+
+/* top strip */
+.strip{grid-area:strip;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  border-bottom:1px solid var(--line);padding-bottom:6px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.mode{font-family:var(--f-num);font-weight:700;letter-spacing:.14em;font-size:13px;color:var(--fg);margin-right:4px}
+.mode i{font-style:normal;color:var(--accent)}
+.chip{font-family:var(--f-num);font-size:11px;letter-spacing:.1em;padding:2px 7px;border:1px solid var(--line2);border-radius:3px;color:var(--mute);white-space:nowrap}
+.chip.ok{color:var(--good);border-color:color-mix(in srgb,var(--good) 45%,transparent)}
+.chip.warn{color:var(--warm);border-color:color-mix(in srgb,var(--warm) 45%,transparent)}
+.chip.bad{color:var(--hot);border-color:color-mix(in srgb,var(--hot) 45%,transparent)}
+.stats{display:flex;gap:18px;align-items:baseline}
+.stat{display:flex;flex-direction:column;align-items:flex-end;line-height:1}
+.stat .k{font-size:10px;letter-spacing:.14em;color:var(--mute);margin-bottom:3px}
+.stat .v{font-family:var(--f-num);font-weight:600;font-size:22px;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:11px;color:var(--mute);font-weight:500;margin-left:3px;letter-spacing:.06em}
+.stat.speed .v{font-size:30px}
+
+/* side panels */
+.side{display:flex;flex-direction:column;justify-content:center;gap:10px;min-width:0}
+.side.left{grid-area:left}.side.right{grid-area:right}
+.side .lbl{font-family:var(--f-num);font-size:12px;letter-spacing:.2em;color:var(--mute);display:flex;align-items:center;gap:6px}
+.side.right .lbl{justify-content:flex-end}
+.side.right{text-align:right}
+.metric{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.metric .k{font-size:10px;letter-spacing:.16em;color:var(--mute)}
+.metric .v{font-family:var(--f-num);font-weight:600;font-size:clamp(28px,7vmin,54px);line-height:1.02;font-variant-numeric:tabular-nums}
+.metric .v sup{font-size:.45em;color:var(--mute);vertical-align:.9em;margin-left:1px}
+.metric.w5 .v{color:var(--accent2)}
+.bar{height:4px;background:var(--line);border-radius:2px;margin-top:6px;overflow:hidden;position:relative}
+.bar i{position:absolute;top:0;bottom:0;left:0;width:0;background:var(--fg);border-radius:2px}
+.side.right .bar i{left:auto;right:0}
+.metric.w5 .bar i{background:var(--accent2)}
+.bar i.hot{background:var(--hot)!important}
+#app.port .side{justify-content:flex-start}
+#app.port .metric .v{font-size:clamp(26px,8vmin,42px)}
+
+/* center */
+.center{grid-area:center;position:relative;min-height:0;min-width:0}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+/* zone comparator */
+.zone{grid-area:zone;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 10px;display:flex;align-items:center;gap:14px;min-width:0}
+.zone .zk{font-family:var(--f-num);font-size:11px;letter-spacing:.18em;color:var(--mute);line-height:1.2;flex:0 0 auto}
+.zone .zk b{display:block;color:var(--fg);font-weight:600;letter-spacing:.1em;font-size:12px}
+.zrow{display:flex;gap:16px;align-items:baseline;flex:1;min-width:0}
+.zcell{display:flex;flex-direction:column;line-height:1}
+.zcell span{font-size:9.5px;letter-spacing:.16em;color:var(--mute);margin-bottom:3px}
+.zcell b{font-family:var(--f-num);font-weight:600;font-size:22px;font-variant-numeric:tabular-nums}
+.zdelta{margin-left:auto;font-family:var(--f-num);font-weight:700;font-size:28px;font-variant-numeric:tabular-nums;padding:2px 10px;border-radius:4px;background:var(--panel2);min-width:72px;text-align:center}
+.zdelta.up{color:var(--bg);background:var(--good)}
+.zdelta.down{color:var(--bg);background:var(--warm)}
+.zinfo{font-size:10.5px;color:var(--mute);letter-spacing:.04em}
+
+/* controls */
+.ctrl{grid-area:ctrl;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+button{font-family:var(--f-num);font-weight:600;letter-spacing:.12em;font-size:12px;color:var(--fg);background:var(--panel2);
+  border:1px solid var(--line2);border-radius:6px;padding:10px 6px;min-height:44px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:active{background:var(--line2)}
+button:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+#app.land .ctrl button{font-size:10.5px;letter-spacing:.02em;padding:6px 2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* sheet */
+.veil{position:absolute;inset:0;background:rgba(3,5,8,.72);display:flex;align-items:center;justify-content:center;padding:14px;z-index:5;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.card{background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:16px 18px;max-width:440px;width:100%;max-height:100%;overflow:auto;box-sizing:border-box;display:flex;flex-direction:column;gap:10px}
+.card h1{font-family:var(--f-num);font-weight:700;letter-spacing:.1em;font-size:22px;margin:0;text-wrap:balance}
+.card h1 i{font-style:normal;color:var(--accent)}
+.card p{margin:0;color:#b9c3cf;font-size:13px;line-height:1.45}
+.card .note{font-size:11.5px;color:var(--mute)}
+.card .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.card .opt{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding-top:10px}
+.card .opt span{font-size:12.5px;color:#c9d2dc}
+.card .opt button{min-height:36px;padding:6px 12px;font-size:11px}
+.outlink{display:block;text-align:center;font-family:var(--f-num);font-weight:600;letter-spacing:.12em;font-size:12px;color:#fff;background:var(--accent);border-radius:6px;padding:12px 6px;text-decoration:none}
+.card #msg{color:var(--warm);font-size:12.5px;line-height:1.4}
+.toast{position:absolute;left:50%;bottom:18%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line2);border-radius:6px;padding:8px 14px;font-family:var(--f-num);letter-spacing:.08em;font-size:13px;z-index:6;max-width:80%;text-align:center;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+
+<div id="app" class="port">
+  <header class="strip">
+    <div class="chips">
+      <span class="mode">LEAN<i>·</i>PRO</span>
+      <span class="chip warn" id="chSensor">DEMO</span>
+      <span class="chip" id="chGps">GPS —</span>
+      <span class="chip" id="chCal">SIN CALIBRAR</span>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="k">G LAT</span><span class="v" id="gLat">0.00</span></div>
+      <div class="stat"><span class="k" id="gLonK">G LON</span><span class="v" id="gLon">0.00</span></div>
+      <div class="stat speed"><span class="k">VELOCIDAD</span><span class="v"><span id="spd">—</span><small>km/h</small></span></div>
+    </div>
+  </header>
+
+  <section class="side left" aria-label="Inclinación izquierda">
+    <div class="lbl">◀ IZQUIERDA</div>
+    <div class="metric w5"><div class="k">MÁX 5 s</div><div class="v"><span id="m5L">0</span><sup>°</sup></div><div class="bar"><i id="b5L"></i></div></div>
+    <div class="metric"><div class="k">MÁX SESIÓN</div><div class="v"><span id="maxL">0</span><sup>°</sup></div><div class="bar"><i id="bMaxL"></i></div></div>
+  </section>
+
+  <section class="center"><canvas id="cv" aria-label="Moto virtual e inclinación actual"></canvas></section>
+
+  <section class="side right" aria-label="Inclinación derecha">
+    <div class="lbl">DERECHA ▶</div>
+    <div class="metric w5"><div class="k">MÁX 5 s</div><div class="v"><span id="m5R">0</span><sup>°</sup></div><div class="bar"><i id="b5R"></i></div></div>
+    <div class="metric"><div class="k">MÁX SESIÓN</div><div class="v"><span id="maxR">0</span><sup>°</sup></div><div class="bar"><i id="bMaxR"></i></div></div>
+  </section>
+
+  <section class="zone" aria-label="Comparador por zona">
+    <div class="zk">ZONA<b id="zName">—</b></div>
+    <div class="zrow">
+      <div class="zcell"><span>VEZ ANTERIOR</span><b id="zPrev">—</b></div>
+      <div class="zcell"><span>AHORA</span><b id="zNow">—</b></div>
+      <div class="zdelta" id="zDelta">—</div>
+    </div>
+  </section>
+
+  <nav class="ctrl">
+    <button id="bCal" type="button">CALIBRAR 0°</button>
+    <button id="bReset" type="button">RESET MÁX</button>
+    <button id="bMenu" type="button">MENÚ</button>
+  </nav>
+
+  <div class="veil" id="veil">
+    <div class="card" role="dialog" aria-labelledby="ttl">
+      <h1 id="ttl">LEAN<i>·</i>PRO 125</h1>
+      <p>Monta el iPhone en el manillar con la pantalla hacia ti, en vertical u horizontal. Con la moto recta, pulsa <b>Calibrar 0°</b>. La pantalla se orienta sola y queda fija al calibrar.</p>
+      <div class="row">
+        <button class="primary" id="bStart" type="button">ACTIVAR SENSORES</button>
+        <button id="bDemo" type="button">VER DEMO</button>
+      </div>
+      <div id="msg" hidden></div>
+      <a id="bOut" class="outlink" href="#" target="_blank" rel="noopener" hidden>ABRIR FUERA DEL VISOR ↗</a>
+      <div class="opt"><span>Sentido de inclinación</span><button id="bInv" type="button">NORMAL</button></div>
+      <div class="opt"><span>Orientación de pantalla</span><button id="bRot" type="button">AUTO</button></div>
+      <div class="opt"><span>Zonas GPS guardadas: <b id="zCount">0</b></span><button id="bClr" type="button">BORRAR</button></div>
+      <p class="note">Medición de referencia con los sensores del teléfono, sin certificar. No manipules el teléfono en marcha.</p>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+(()=>{
+"use strict";
+const $=id=>document.getElementById(id);
+const app=$('app'),cv=$('cv'),ctx=cv.getContext('2d');
+const D2R=Math.PI/180,R2D=180/Math.PI;
+const wrap=a=>((a+180)%360+360)%360-180;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const norm=a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return[a[0]/l,a[1]/l,a[2]/l]};
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+/* ---------- state ---------- */
+const S={gpsLon:0,mode:'demo',lean:0,disp:0,maxL:0,maxR:0,m5L:0,m5R:0,maxBrk:0,maxAcc:0,buf:[],speed:null,gLat:0,gLon:0,
+  invert:store.get('lp_inv',false),manualRot:null,calibrated:false,mountQuad:0,gps:false,
+  zoneKey:null,zoneName:'—',pass:0,prev:null};
+
+/* ---------- sensor fusion ----------
+   Lean = rotation about the bike's forward axis.
+   Gyro roll rate is integrated; the attitude from DeviceOrientation corrects it only when the bike
+   is not turning (low total rotation), because in a steady curve gravity + centripetal force
+   look "straight" to an accelerometer. Gyro axis mapping and sign are learned automatically. */
+const MAPS=[[1,2,0],[0,1,2]]; // indices into [alpha,beta,gamma] for device x,y,z
+const F={u0:null,f:null,r:null,up:null,theta:0,gotOri:false,gotMot:false,haveGyro:false,
+  map:-1,sign:0,corr:[0,0],rawRates:[0,0],lastRef:null,lastOriT:0,lastMotT:0,quiet:0,yaw:null,stableT:0,candQuad:0,accRaw:0,haveAcc:false,accSign:1,accLocked:false,accCorr:0,accN:0,accBias:0};
+function upFrom(b,g){const B=b*D2R,G=g*D2R;return[-Math.sin(G)*Math.cos(B),Math.sin(B),Math.cos(G)*Math.cos(B)]}
+function setAxes(up){
+  F.u0=up.slice();
+  const z=[0,0,1],y=[0,1,0];
+  let zh=[z[0]-dot(z,up)*up[0],z[1]-dot(z,up)*up[1],z[2]-dot(z,up)*up[2]];
+  if(Math.hypot(...zh)>0.35){F.f=norm([-zh[0],-zh[1],-zh[2]])}
+  else{const yh=[y[0]-dot(y,up)*up[0],y[1]-dot(y,up)*up[1],y[2]-dot(y,up)*up[2]];F.f=norm(yh)}
+  F.r=cross(F.f,F.u0);
+}
+function refAngle(up){return Math.atan2(-dot(up,F.r),dot(up,F.u0))*R2D}
+function calibrate(manual){
+  if(!F.up){toast('Esperando sensores…');return}
+  setAxes(F.up);F.theta=0;F.lastRef=0;
+  if(manual){S.calibrated=true;S.mountQuad=quadOf(F.up);applyLayout();toast('Calibrado a 0° · pantalla fijada')}
+  updChips();
+}
+function quadOf(up){const a=Math.atan2(up[0],up[1])*R2D;return((Math.round(a/90)%4)+4)%4}
+function onOri(e){
+  if(e.beta==null||e.gamma==null)return;
+  F.gotOri=true;const up=upFrom(e.beta,e.gamma);F.up=up;
+  const t=performance.now();const dt=F.lastOriT?clamp((t-F.lastOriT)/1000,0.001,0.2):0.016;F.lastOriT=t;
+  if(!F.u0)setAxes(up);
+  const ref=refAngle(up);
+  if(F.lastRef!=null&&F.map<0&&F.haveGyro){
+    const dRef=wrap(ref-F.lastRef)/dt;
+    if(Math.abs(dRef)>8&&Math.abs(dRef)<400){for(let i=0;i<2;i++)F.corr[i]+=F.rawRates[i]*dRef*dt}
+    const a=Math.abs(F.corr[0]),b=Math.abs(F.corr[1]);
+    const best=a>=b?0:1,bv=Math.max(a,b),ov=Math.min(a,b);
+    if(bv>900&&bv>2.2*ov){F.map=best;F.sign=Math.sign(F.corr[best]);F.theta=ref;updChips()}
+  }
+  if(F.map<0||!F.haveGyro){F.theta+=wrap(ref-F.theta)*(1-Math.exp(-dt/0.06))}
+  else{const tau=F.quiet<5?0.7:25;F.theta+=wrap(ref-F.theta)*(1-Math.exp(-dt/tau))}
+  F.lastRef=ref;
+  // auto mount orientation (until calibrated)
+  if(!S.calibrated&&S.mode==='live'){
+    const a=Math.atan2(up[0],up[1])*R2D,q=quadOf(up),off=Math.abs(wrap(a-q*90));
+    if(q!==S.mountQuad&&off<28){if(F.candQuad!==q){F.candQuad=q;F.stableT=t}else if(t-F.stableT>700){S.mountQuad=q;applyLayout()}}
+    else F.candQuad=S.mountQuad;
+  }
+}
+function onMot(e){
+  const rr=e.rotationRate;F.gotMot=true;
+  if(!rr||rr.alpha==null||!F.f)return;
+  const t=performance.now();
+  const ac=e.acceleration;
+  if(ac&&ac.x!=null){const dta=F.lastMotT?clamp((t-F.lastMotT)/1000,0.001,0.1):0.016;
+    const raw=(ac.x*F.f[0]+ac.y*F.f[1]+ac.z*F.f[2])/9.81;F.accRaw+=(raw-F.accRaw)*(1-Math.exp(-dta/0.12));F.haveAcc=true}
+  F.haveGyro=true;const dt=F.lastMotT?clamp((t-F.lastMotT)/1000,0.001,0.1):0.016;F.lastMotT=t;
+  const raw=[rr.alpha,rr.beta,rr.gamma];
+  const mag=Math.hypot(raw[0],raw[1],raw[2]);F.quiet+=(mag-F.quiet)*(1-Math.exp(-dt/0.4));
+  for(let i=0;i<2;i++){const m=MAPS[i],w=[raw[m[0]],raw[m[1]],raw[m[2]]];F.rawRates[i]=dot(w,F.f)}
+  if(F.map>=0){
+    const m=MAPS[F.map],w=[raw[m[0]]*F.sign,raw[m[1]]*F.sign,raw[m[2]]*F.sign];
+    F.theta+=dot(w,F.f)*dt;
+    if(F.up)F.yaw=dot(w,F.up);
+  }
+}
+
+/* ---------- GPS ---------- */
+let gpsId=null,lastFix=null,cells=store.get('lp_cells',{}),demoCells={},cellsDirty=false;
+function onGps(p){
+  const c=p.coords,t=p.timestamp||Date.now();S.gps=true;
+  let v=(c.speed!=null&&c.speed>=0)?c.speed:null,hd=(c.heading!=null&&!isNaN(c.heading))?c.heading:null;
+  if(lastFix){
+    const dtt=(t-lastFix.t)/1000;
+    if(dtt>0.2){
+      const dy=(c.latitude-lastFix.lat)*111320,dx=(c.longitude-lastFix.lon)*111320*Math.cos(c.latitude*D2R),d=Math.hypot(dx,dy);
+      if(v==null)v=d/dtt;
+      if(hd==null&&d>3)hd=(Math.atan2(dx,dy)*R2D+360)%360;
+      if(lastFix.v!=null&&v!=null){const a=(v-lastFix.v)/dtt/9.81;S.gpsLon+=(clamp(a,-1.5,1.5)-S.gpsLon)*0.5;
+        if(F.haveAcc&&v>4){
+          if(!F.accLocked&&Math.abs(S.gpsLon)>0.08){F.accCorr+=F.accRaw*S.gpsLon;F.accN++;
+            if(F.accN>=8&&Math.abs(F.accCorr)>0.15){F.accSign=Math.sign(F.accCorr);F.accLocked=true;F.accBias=0}}
+          if(F.accLocked)F.accBias+=((F.accSign*F.accRaw-S.gpsLon)-F.accBias)*0.04;
+        }}
+    }
+  }
+  S.speed=v;lastFix={t,lat:c.latitude,lon:c.longitude,v};
+  if(v!=null&&v*3.6>8&&c.accuracy<35&&hd!=null){
+    const step=0.00025,la=Math.round(c.latitude/step),lo=Math.round(c.longitude/(step/Math.cos(c.latitude*D2R))),sec=Math.round(hd/45)%8;
+    enterZone(la+':'+lo+':'+sec,'Z'+String(Math.abs(la*31+lo)%1000).padStart(3,'0'),cells);
+  }
+  updChips();
+}
+function onGpsErr(){S.gps=false;updChips()}
+function enterZone(key,name,book){
+  if(key===S.zoneKey)return;
+  if(S.zoneKey&&Math.abs(S.pass)>=3){book[S.zoneKey]={m:Math.round(S.pass*10)/10,t:Date.now()};if(book===cells)cellsDirty=true}
+  S.zoneKey=key;S.zoneName=name;S.prev=book[key]||null;S.pass=0;
+}
+function saveCells(){
+  if(!cellsDirty)return;cellsDirty=false;
+  const ks=Object.keys(cells);
+  if(ks.length>8000){ks.sort((a,b)=>cells[a].t-cells[b].t).slice(0,ks.length-8000).forEach(k=>delete cells[k])}
+  store.set('lp_cells',cells);
+}
+setInterval(saveCells,5000);
+addEventListener('pagehide',saveCells);
+
+/* ---------- start / permissions ---------- */
+let wake=null;
+async function keepAwake(){try{if('wakeLock' in navigator&&document.visibilityState==='visible')wake=await navigator.wakeLock.request('screen')}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.mode==='live')keepAwake()});
+function startSensors(){
+  const msg=$('msg');msg.hidden=true;
+  const reqs=[];
+  try{
+    if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function')reqs.push(DeviceMotionEvent.requestPermission());
+    if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function')reqs.push(DeviceOrientationEvent.requestPermission());
+  }catch(e){}
+  Promise.all(reqs).then(res=>{
+    if(res.some(r=>r!=='granted')){showBlocked(IN_FRAME?FRAME_MSG:'Has denegado el acceso a movimiento y orientación. Cierra la pestaña, vuelve a abrirla y acepta el permiso cuando Safari lo pregunte.');return}
+    addEventListener('deviceorientation',onOri);addEventListener('devicemotion',onMot);
+    setTimeout(()=>{
+      if(!F.gotOri){removeEventListener('deviceorientation',onOri);removeEventListener('devicemotion',onMot);
+        showBlocked(IN_FRAME?FRAME_MSG:'No llegan datos de los sensores. Comprueba en Ajustes › Safari que «Movimiento y orientación» esté activado.');return}
+      S.mode='live';S.calibrated=false;S.zoneKey=null;S.pass=0;S.prev=null;resetMax();
+      F.map=-1;F.corr=[0,0];F.accRaw=0;F.accLocked=false;F.accSign=1;F.accCorr=0;F.accN=0;F.accBias=0;S.gpsLon=0;F.u0=null;F.theta=0;F.lastRef=null;
+      if('geolocation' in navigator){try{gpsId=navigator.geolocation.watchPosition(onGps,onGpsErr,{enableHighAccuracy:true,maximumAge:0,timeout:15000})}catch(e){onGpsErr()}}
+      keepAwake();$('veil').hidden=true;updChips();toast('Sensores activos · pon la moto recta y calibra');
+    },1500);
+  }).catch(()=>showBlocked(IN_FRAME?FRAME_MSG:'El navegador no ha permitido el acceso a los sensores. Abre la página en Safari con https.'));
+}
+let IN_FRAME=false;try{IN_FRAME=window.self!==window.top}catch(e){IN_FRAME=true}
+const FRAME_MSG='Dentro del visor de Claude, el iPhone bloquea los sensores de movimiento sin preguntarte. Pulsa «Abrir fuera del visor» y acepta el permiso en Safari. Si ese botón no aparece o no funciona, usa la versión alojada en tu propia web.';
+function showBlocked(t){const m=$('msg');m.textContent=t;m.hidden=false;S.mode='demo';
+  const o=$('bOut');if(IN_FRAME&&/^https:/.test(location.href)){o.href=location.href;o.hidden=false}
+  updChips()}
+
+/* ---------- demo ---------- */
+const SEG=[{d:2.4,l:0},{d:4.4,l:38},{d:1.8,l:0},{d:5,l:-44},{d:1.2,l:0},{d:2.1,l:29},{d:2.3,l:-33},{d:2.8,l:0},{d:4,l:49},{d:2,l:0}];
+const LAP=SEG.reduce((a,s)=>a+s.d,0);
+let demoT=0,demoLap=-1,lapF=[],demoSpd=100;
+let demoLast=0;
+function demoStep(dt){
+  if(!(dt>0))return demoLast;
+  demoT+=dt;const lap=Math.floor(demoT/LAP),tl=demoT-lap*LAP;
+  if(lap!==demoLap){demoLap=lap;lapF=SEG.map(()=>lap===0?1:0.9+Math.random()*0.18)}
+  let acc=0,v=0;
+  for(let i=0;i<SEG.length;i++){const s=SEG[i];if(tl<acc+s.d){const p=(tl-acc)/s.d;v=s.l*lapF[i]*Math.pow(Math.sin(Math.PI*p),0.62);break}acc+=s.d}
+  v+=Math.sin(demoT*23)*0.25;
+  const target=112-1.05*Math.abs(v),old=demoSpd;demoSpd+=(target-demoSpd)*Math.min(1,dt*1.6);
+  S.speed=demoSpd/3.6;S.gLon+=(clamp((demoSpd-old)/3.6/dt/9.81,-1.5,1.5)-S.gLon)*Math.min(1,dt*4);
+  enterZone('D'+lap%1+':'+Math.floor(tl/1.6),'D'+String(Math.floor(tl/1.6)+1).padStart(2,'0'),demoCells);
+  demoLast=v;return v;
+}
+
+/* ---------- maxima ---------- */
+function resetMax(){S.maxL=S.maxR=S.m5L=S.m5R=0;S.maxBrk=0;S.maxAcc=0;S.buf=[]}
+function track(v,now){
+  if(v>S.maxR)S.maxR=v;if(-v>S.maxL)S.maxL=-v;
+  S.buf.push(now,v);
+  let i=0;while(i<S.buf.length&&now-S.buf[i]>5000)i+=2;if(i)S.buf.splice(0,i);
+  let l=0,r=0;for(let j=1;j<S.buf.length;j+=2){const x=S.buf[j];if(x>r)r=x;if(-x>l)l=-x}
+  S.m5L=l;S.m5R=r;
+  if(Math.abs(v)>Math.abs(S.pass))S.pass=v;
+}
+
+/* ---------- layout / rotation ---------- */
+function screenAngle(){if(typeof window.orientation==='number')return window.orientation;return(screen.orientation&&screen.orientation.angle)||0}
+function applyLayout(){
+  const W=innerWidth,H=innerHeight;
+  let rot=0;
+  if(S.manualRot!=null)rot=S.manualRot;
+  else if(S.mode==='live'){rot=wrap(S.mountQuad*90-screenAngle());rot=Math.round(rot/90)*90;if(rot===-180)rot=180}
+  const side=Math.abs(rot)===90,w=side?H:W,h=side?W:H;
+  app.style.width=w+'px';app.style.height=h+'px';
+  app.style.left=((W-w)/2)+'px';app.style.top=((H-h)/2)+'px';
+  app.style.transform=rot?`rotate(${rot}deg)`:'none';
+  app.className=w>h*1.05?'land':'port';
+  sizeCanvas();
+}
+addEventListener('resize',()=>setTimeout(applyLayout,60));
+addEventListener('orientationchange',()=>setTimeout(applyLayout,250));
+
+/* ---------- drawing ---------- */
+let dpr=1,cw=0,ch=0;
+function sizeCanvas(){dpr=Math.min(3,devicePixelRatio||1);cw=cv.clientWidth;ch=cv.clientHeight;cv.width=Math.max(1,Math.round(cw*dpr));cv.height=Math.max(1,Math.round(ch*dpr))}
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C={};function readColors(){['--bg','--panel','--line','--line2','--fg','--mute','--accent','--accent2','--hot','--warm'].forEach(k=>C[k]=css(k))}
+readColors();
+const NUM='"Saira Semi Condensed","Arial Narrow",sans-serif';
+function leanColor(a){a=Math.abs(a);return a>=45?C['--hot']:a>=30?C['--accent2']:C['--accent']}
+
+function draw(){
+  if(cv.clientWidth!==cw||cv.clientHeight!==ch)sizeCanvas();
+  const w=cw,h=ch;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+  const LIM=65;
+  // inset box (bottom-right): side view + longitudinal G
+  const bw=clamp(Math.min(w*0.42,h*0.62),120,230),bh=Math.round(bw*0.74),bx=w-bw-4,by=h-bh-4;
+  const inBox=(x,y)=>x>bx-6&&y>by-6;
+  const geo=R=>{const gy=clamp(h/2+R*0.6,R*1.26,h-6),lw=Math.max(5,R*0.045);return{gy,lw}};
+  let R=Math.max(40,Math.min(w*0.44,(h-8)/1.3)),cx=w/2;
+  const hits=(R,cxx)=>{const{gy,lw}=geo(R);
+    if(cxx-R*1.08<0)return true;
+    for(let t=15;t<=70;t+=5){for(const r of[R-lw,R+lw+R*0.2]){if(inBox(cxx+r*Math.sin(t*D2R),gy-r*Math.cos(t*D2R)))return true}}
+    for(let t=20;t<=90;t+=5){const r=R*0.62;if(inBox(cxx+r*Math.sin(t*D2R),gy-r*Math.cos(t*D2R)))return true}
+    return false};
+  outer:for(let k=0;k<16;k++){for(const sh of[0,0.04,0.08,0.12,0.16]){const c=w/2-sh*w;if(!hits(R,c)){cx=c;break outer}}R*=0.95}
+  const gy=geo(R).gy;
+  const pt=(deg,r)=>[cx+r*Math.sin(deg*D2R),gy-r*Math.cos(deg*D2R)];
+  const A=deg=>-Math.PI/2+deg*D2R;
+  // road + ground line
+  const rg=ctx.createLinearGradient(0,gy,0,h);rg.addColorStop(0,'rgba(43,125,233,0.10)');rg.addColorStop(1,'rgba(43,125,233,0)');
+  ctx.fillStyle=rg;ctx.fillRect(0,gy,w,h-gy);
+  ctx.strokeStyle=C['--line2'];ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,gy+0.5);ctx.lineTo(w,gy+0.5);ctx.stroke();
+  // arc track
+  const lw=Math.max(5,R*0.045);
+  ctx.lineCap='butt';ctx.lineWidth=lw;
+  [[-LIM,-45,'rgba(255,59,48,0.22)'],[-45,-30,'rgba(122,184,255,0.16)'],[-30,30,C['--line']],[30,45,'rgba(122,184,255,0.16)'],[45,LIM,'rgba(255,59,48,0.22)']]
+    .forEach(([a,b,c])=>{ctx.strokeStyle=c;ctx.beginPath();ctx.arc(cx,gy,R,A(a),A(b));ctx.stroke()});
+  // ticks + labels
+  ctx.fillStyle=C['--mute'];ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font=`500 ${Math.max(10,R*0.075)}px ${NUM}`;
+  for(let d=-60;d<=60;d+=5){
+    const maj=d%15===0,[x1,y1]=pt(d,R+lw*0.8),[x2,y2]=pt(d,R+lw*0.8+(maj?R*0.07:R*0.035));
+    ctx.strokeStyle=maj?C['--fg']:C['--line2'];ctx.lineWidth=maj?1.6:1;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    if(maj){const[tx,ty]=pt(d,R+lw+R*0.15);ctx.fillText(Math.abs(d),tx,ty)}
+  }
+  // current fill
+  const v=clamp(S.disp,-LIM,LIM);
+  if(Math.abs(v)>0.4){ctx.strokeStyle=leanColor(v);ctx.lineWidth=lw;ctx.shadowColor=leanColor(v);ctx.shadowBlur=Math.abs(v)>=45?14:6;
+    ctx.beginPath();ctx.arc(cx,gy,R,A(Math.min(0,v)),A(Math.max(0,v)));ctx.stroke();ctx.shadowBlur=0}
+  // markers: 5 s (inside, blue) and session (outside, white)
+  const tri=(deg,r,out,col,sz)=>{const a=deg*D2R,s=Math.sin(a),c=Math.cos(a);const[bx,by]=pt(deg,r);const dir=out?1:-1;
+    ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx+dir*s*sz*1.4+c*sz*0.8,by-dir*c*sz*1.4+s*sz*0.8);ctx.lineTo(bx+dir*s*sz*1.4-c*sz*0.8,by-dir*c*sz*1.4-s*sz*0.8);ctx.closePath();ctx.fill()};
+  const sz=Math.max(5,R*0.04);
+  if(S.m5L>1)tri(-Math.min(S.m5L,LIM),R-lw*0.6,false,C['--accent2'],sz);
+  if(S.m5R>1)tri(Math.min(S.m5R,LIM),R-lw*0.6,false,C['--accent2'],sz);
+  if(S.maxL>1)tri(-Math.min(S.maxL,LIM),R+lw*0.6,true,C['--fg'],sz);
+  if(S.maxR>1)tri(Math.min(S.maxR,LIM),R+lw*0.6,true,C['--fg'],sz);
+  // needle along bike axis
+  const[nx,ny]=pt(v,R-lw*0.7);const ng=ctx.createLinearGradient(cx,gy,nx,ny);ng.addColorStop(0,'rgba(122,184,255,0)');ng.addColorStop(1,leanColor(v));
+  ctx.strokeStyle=ng;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(cx,gy);ctx.lineTo(nx,ny);ctx.stroke();
+  // big number
+  const av=Math.round(Math.abs(S.disp));
+  ctx.fillStyle=Math.abs(S.disp)>=45?C['--hot']:C['--fg'];ctx.textBaseline='alphabetic';
+  ctx.font=`700 ${R*0.24}px ${NUM}`;ctx.fillText(av+'°',cx+R*0.03,gy-R*0.73);
+  ctx.font=`600 ${Math.max(10,R*0.07)}px ${NUM}`;ctx.fillStyle=C['--mute'];
+  ctx.fillText(av<1?'VERTICAL':(S.disp>0?'DERECHA ▶':'◀ IZQUIERDA'),cx,gy-R*0.65);
+  // shadow
+  ctx.fillStyle='rgba(0,0,0,0.55)';ctx.beginPath();ctx.ellipse(cx+Math.sin(v*D2R)*R*0.05,gy+2,R*0.13,R*0.025,0,0,Math.PI*2);ctx.fill();
+  // bike
+  ctx.save();ctx.translate(cx,gy);ctx.rotate(v*D2R);drawBike(R*0.6);ctx.restore();
+  drawInset(bx,by,bw,bh);
+}
+
+/* Original rear-view drawing of a black 125 cc supersport (no brand marks). Units: H = height, origin = tyre contact patch, y up. */
+function drawBike(H){
+  const c=ctx,X=x=>x*H,Y=y=>-y*H,brk=S.gLon<-0.1;
+  const M=(x,y)=>c.moveTo(X(x),Y(y)),L=(x,y)=>c.lineTo(X(x),Y(y)),
+        Q=(a,b,x,y)=>c.quadraticCurveTo(X(a),Y(b),X(x),Y(y)),
+        B=(a,b,d,e,x,y)=>c.bezierCurveTo(X(a),Y(b),X(d),Y(e),X(x),Y(y));
+  const lin=(x0,x1,st)=>{const g=c.createLinearGradient(X(x0),0,X(x1),0);st.forEach(([o,k])=>g.addColorStop(o,k));return g};
+  const vlin=(y0,y1,st)=>{const g=c.createLinearGradient(0,Y(y0),0,Y(y1));st.forEach(([o,k])=>g.addColorStop(o,k));return g};
+  const PAINT=[[0,'#262b33'],[0.14,'#0b0c0e'],[0.36,'#121418'],[0.47,'#2c323b'],[0.53,'#2c323b'],[0.64,'#121418'],[0.86,'#070809'],[1,'#222730']];
+  const ALU=[[0,'#3c434c'],[0.45,'#a4adb8'],[0.55,'#8b949f'],[1,'#353b43']];
+  const edge=(a,w)=>{c.strokeStyle=`rgba(205,222,245,${a})`;c.lineWidth=Math.max(0.6,H*(w||0.0035));c.stroke()};
+  const shine=(a,w)=>{c.strokeStyle=`rgba(255,255,255,${a})`;c.lineWidth=Math.max(0.8,H*(w||0.006));c.lineCap='round';c.stroke()};
+  c.lineJoin='round';c.lineCap='round';
+
+  // mirrors
+  [-1,1].forEach(s=>{
+    c.beginPath();M(s*0.13,0.8);Q(s*0.2,0.82,s*0.235,0.885);c.strokeStyle='#15181c';c.lineWidth=H*0.013;c.stroke();
+    c.beginPath();M(s*0.22,0.875);B(s*0.22,0.93,s*0.34,0.935,s*0.335,0.895);B(s*0.33,0.865,s*0.23,0.86,s*0.22,0.875);c.closePath();
+    c.fillStyle=lin(s*0.21,s*0.34,PAINT);c.fill();edge(0.2);
+    c.beginPath();M(s*0.24,0.915);Q(s*0.28,0.925,s*0.315,0.91);shine(0.18,0.005);
+  });
+  // windscreen
+  c.beginPath();M(-0.082,0.83);L(-0.07,0.95);Q(0,1.005,0.07,0.95);L(0.082,0.83);c.closePath();
+  c.fillStyle=vlin(1,0.83,[[0,'rgba(95,120,148,0.85)'],[1,'rgba(18,26,36,0.95)']]);c.fill();edge(0.3);
+  c.beginPath();M(-0.045,0.96);Q(0,0.985,0.045,0.96);shine(0.25,0.004);
+  // upper fairing
+  c.beginPath();M(-0.19,0.6);B(-0.235,0.66,-0.225,0.75,-0.16,0.835);L(0.16,0.835);B(0.225,0.75,0.235,0.66,0.19,0.6);c.closePath();
+  c.fillStyle=lin(-0.235,0.235,PAINT);c.fill();edge(0.16);
+  [-1,1].forEach(s=>{c.beginPath();M(s*0.2,0.64);Q(s*0.215,0.72,s*0.17,0.81);shine(0.1,0.005)});
+  // clip-ons, levers, grips, bar ends
+  c.beginPath();M(-0.1,0.745);L(-0.24,0.728);M(0.1,0.745);L(0.24,0.728);c.strokeStyle='#2c3138';c.lineWidth=H*0.014;c.stroke();
+  [-1,1].forEach(s=>{
+    c.beginPath();M(s*0.185,0.735);L(s*0.24,0.728);c.strokeStyle='#0a0b0d';c.lineWidth=H*0.03;c.stroke();
+    c.beginPath();M(s*0.2,0.752);L(s*0.262,0.765);c.strokeStyle='#5d6570';c.lineWidth=H*0.007;c.stroke();
+    c.beginPath();c.arc(X(s*0.25),Y(0.728),H*0.013,0,Math.PI*2);c.fillStyle='#9aa3ad';c.fill();
+  });
+  // tank
+  c.beginPath();M(-0.152,0.6);B(-0.168,0.7,-0.125,0.788,0,0.798);B(0.125,0.788,0.168,0.7,0.152,0.6);c.closePath();
+  c.fillStyle=lin(-0.17,0.17,PAINT);c.fill();edge(0.22);
+  c.beginPath();M(-0.085,0.77);Q(0,0.792,0.085,0.77);shine(0.22,0.007);
+  [-1,1].forEach(s=>{c.beginPath();c.ellipse(X(s*0.12),Y(0.66),H*0.025,H*0.045,s*0.25,0,Math.PI*2);c.fillStyle='rgba(0,0,0,0.45)';c.fill()});
+  // frame spars
+  [-1,1].forEach(s=>{c.beginPath();M(s*0.118,0.52);L(s*0.15,0.53);L(s*0.15,0.625);L(s*0.12,0.62);c.closePath();c.fillStyle=lin(s*0.118,s*0.15,ALU);c.fill()});
+  // lower fairing / belly with vents
+  c.beginPath();M(-0.09,0.1);B(-0.16,0.16,-0.218,0.3,-0.218,0.44);B(-0.218,0.52,-0.2,0.585,-0.178,0.62);
+  L(-0.12,0.6);L(0.12,0.6);L(0.178,0.62);B(0.2,0.585,0.218,0.52,0.218,0.44);B(0.218,0.3,0.16,0.16,0.09,0.1);c.closePath();
+  c.fillStyle=lin(-0.22,0.22,PAINT);c.fill();edge(0.14);
+  [-1,1].forEach(s=>{
+    c.beginPath();M(s*0.205,0.51);L(s*0.18,0.51);L(s*0.158,0.43);L(s*0.185,0.43);c.closePath();c.fillStyle='#020203';c.fill();edge(0.12);
+    c.beginPath();M(s*0.21,0.4);Q(s*0.19,0.28,s*0.12,0.19);c.strokeStyle='rgba(122,184,255,0.3)';c.lineWidth=Math.max(0.6,H*0.004);c.stroke();
+    c.beginPath();M(s*0.208,0.46);Q(s*0.212,0.36,s*0.18,0.27);shine(0.09,0.006);
+  });
+  // exhaust (right, low)
+  c.beginPath();M(0.07,0.07);L(0.185,0.095);Q(0.222,0.15,0.205,0.215);L(0.08,0.205);Q(0.058,0.14,0.07,0.07);c.closePath();
+  c.fillStyle=lin(0.06,0.22,[[0,'#16181c'],[0.5,'#3b424b'],[1,'#121418']]);c.fill();edge(0.2);
+  c.beginPath();c.ellipse(X(0.172),Y(0.152),H*0.03,H*0.034,0,0,Math.PI*2);c.fillStyle='#5a626c';c.fill();
+  c.beginPath();c.ellipse(X(0.172),Y(0.152),H*0.02,H*0.024,0,0,Math.PI*2);c.fillStyle='#040405';c.fill();
+  // rear-sets, heel plates, pillion pegs
+  [-1,1].forEach(s=>{
+    c.beginPath();M(s*0.14,0.3);L(s*0.2,0.31);L(s*0.195,0.445);L(s*0.15,0.435);c.closePath();c.fillStyle=lin(s*0.14,s*0.2,ALU);c.fill();
+    c.beginPath();M(s*0.15,0.34);L(s*0.25,0.334);c.strokeStyle='#1d2126';c.lineWidth=H*0.018;c.stroke();
+    c.beginPath();M(s*0.16,0.476);L(s*0.215,0.472);c.strokeStyle='#2a2f36';c.lineWidth=H*0.012;c.stroke();
+  });
+  // swingarm, chain & sprocket (left), caliper (right)
+  [-1,1].forEach(s=>{c.beginPath();M(s*0.068,0.2);L(s*0.138,0.235);L(s*0.138,0.315);L(s*0.068,0.295);c.closePath();
+    c.fillStyle=lin(s*0.068,s*0.138,[[0,'#262a30'],[0.5,'#6d7580'],[1,'#22262b']]);c.fill();edge(0.12);
+    c.beginPath();c.arc(X(s*0.078),Y(0.245),H*0.011,0,Math.PI*2);c.fillStyle='#b8c0ca';c.fill()});
+  c.beginPath();M(-0.091,0.115);L(-0.091,0.37);c.strokeStyle='#3a4048';c.lineWidth=H*0.013;c.stroke();
+  c.setLineDash([H*0.008,H*0.006]);c.beginPath();M(-0.091,0.12);L(-0.091,0.36);c.strokeStyle='#8a939e';c.lineWidth=H*0.006;c.stroke();c.setLineDash([]);
+  c.beginPath();M(0.074,0.12);L(0.1,0.125);L(0.1,0.205);L(0.074,0.2);c.closePath();c.fillStyle='#1e2227';c.fill();edge(0.15);
+  // rear tyre (round profile) with tread
+  c.beginPath();M(0,0);B(0.046,0,0.071,0.03,0.071,0.09);L(0.071,0.47);B(0.071,0.535,0.042,0.565,0,0.565);
+  B(-0.042,0.565,-0.071,0.535,-0.071,0.47);L(-0.071,0.09);B(-0.071,0.03,-0.046,0,0,0);c.closePath();
+  c.fillStyle=lin(-0.071,0.071,[[0,'#020202'],[0.22,'#121315'],[0.5,'#26282c'],[0.78,'#121315'],[1,'#020202']]);c.fill();
+  c.save();c.clip();
+  c.strokeStyle='rgba(0,0,0,0.65)';c.lineWidth=Math.max(0.8,H*0.006);
+  for(let y=0.06;y<0.52;y+=0.042){c.beginPath();M(-0.04,y);L(-0.012,y+0.02);M(0.04,y+0.021);L(0.012,y+0.041);c.stroke()}
+  c.fillStyle=vlin(0,0.12,[[0,'rgba(0,0,0,0.6)'],[1,'rgba(0,0,0,0)']]);c.fillRect(X(-0.08),Y(0.12),H*0.16,H*0.12);
+  c.restore();edge(0.08);
+  // hugger
+  c.beginPath();M(-0.078,0.44);B(-0.078,0.555,-0.042,0.592,0,0.592);B(0.042,0.592,0.078,0.555,0.078,0.44);
+  c.strokeStyle='#0c0d0f';c.lineWidth=H*0.02;c.lineCap='butt';c.stroke();c.lineCap='round';
+  c.beginPath();M(-0.05,0.583);Q(0,0.6,0.05,0.583);shine(0.12,0.004);
+  // tail tidy, plate, reflector, indicators
+  c.beginPath();M(-0.032,0.585);L(0.032,0.585);L(0.022,0.665);L(-0.022,0.665);c.closePath();c.fillStyle='#0d0f12';c.fill();
+  c.fillStyle=vlin(0.582,0.5,[[0,'#e2e6ea'],[1,'#b7bec6']]);c.fillRect(X(-0.086),Y(0.582),H*0.172,H*0.082);
+  c.fillStyle='#1f4fa8';c.fillRect(X(-0.086),Y(0.582),H*0.018,H*0.082);
+  c.strokeStyle='#111316';c.lineWidth=Math.max(0.8,H*0.005);c.strokeRect(X(-0.086),Y(0.582),H*0.172,H*0.082);
+  c.fillStyle='#9a1414';c.fillRect(X(-0.022),Y(0.495),H*0.044,H*0.011);
+  [-1,1].forEach(s=>{c.beginPath();M(s*0.028,0.625);L(s*0.118,0.622);c.strokeStyle='#131519';c.lineWidth=H*0.009;c.stroke();
+    c.beginPath();c.ellipse(X(s*0.138),Y(0.622),H*0.024,H*0.013,0,0,Math.PI*2);c.fillStyle='#2a2320';c.fill();
+    c.beginPath();c.ellipse(X(s*0.138),Y(0.622),H*0.013,H*0.006,0,0,Math.PI*2);c.fillStyle='rgba(255,170,40,0.75)';c.fill()});
+  // tail cowl
+  c.beginPath();M(-0.1,0.62);B(-0.128,0.65,-0.128,0.69,-0.102,0.72);L(-0.046,0.802);Q(0,0.818,0.046,0.802);
+  L(0.102,0.72);B(0.128,0.69,0.128,0.65,0.1,0.62);Q(0,0.598,-0.1,0.62);c.closePath();
+  c.fillStyle=lin(-0.13,0.13,PAINT);c.fill();edge(0.32);
+  [-1,1].forEach(s=>{c.beginPath();M(s*0.088,0.705);L(s*0.113,0.672);L(s*0.078,0.648);c.closePath();c.fillStyle='#020203';c.fill();edge(0.15);
+    c.beginPath();M(s*0.058,0.785);L(s*0.097,0.725);shine(0.2,0.005)});
+  // LED tail light (brighter while braking)
+  c.save();c.shadowColor='#ff1a1a';c.shadowBlur=H*(brk?0.12:0.05);
+  c.beginPath();M(-0.078,0.708);L(-0.012,0.676);M(0.078,0.708);L(0.012,0.676);
+  c.strokeStyle=brk?'#ff5a4a':'#e01e1e';c.lineWidth=H*(brk?0.02:0.014);c.stroke();
+  c.beginPath();c.ellipse(0,Y(0.662),H*0.018,H*0.008,0,0,Math.PI*2);c.fillStyle=brk?'#ff6a5a':'#b71616';c.fill();c.restore();
+}
+
+/* Inset: side view pitching with longitudinal G (braking dives the nose, acceleration squats the rear). */
+let pitchDisp=0;
+function drawInset(x,y,w,h){
+  const g=S.gLon,pad=Math.max(7,w*0.05);
+  ctx.save();
+  ctx.fillStyle=C['--panel'];ctx.strokeStyle=C['--line2'];ctx.lineWidth=1;
+  ctx.beginPath();if(ctx.roundRect)ctx.roundRect(x+0.5,y+0.5,w-1,h-1,6);else ctx.rect(x+0.5,y+0.5,w-1,h-1);ctx.fill();ctx.stroke();
+  // header
+  const brk=g<-0.05,acc=g>0.05,col=brk?C['--hot']:acc?C['--good']||'#39d98a':C['--fg'];
+  ctx.textBaseline='alphabetic';ctx.textAlign='left';ctx.fillStyle=C['--mute'];
+  ctx.font=`600 ${Math.max(8.5,w*0.058)}px ${NUM}`;ctx.fillText(brk?'FRENADA':acc?'ACELERACIÓN':'G LONGITUDINAL',x+pad,y+pad+w*0.05);
+  ctx.textAlign='right';ctx.fillStyle=col;ctx.font=`700 ${Math.max(14,w*0.12)}px ${NUM}`;
+  ctx.fillText((g>=0?'+':'−')+Math.abs(g).toFixed(2)+' g',x+w-pad,y+pad+w*0.1);
+  // bar
+  const barY=y+h-pad-4,bx0=x+pad,bx1=x+w-pad,bmid=(bx0+bx1)/2,half=(bx1-bx0)/2,SC=1.2;
+  ctx.fillStyle=C['--line'];ctx.fillRect(bx0,barY-2,bx1-bx0,4);
+  const gv=clamp(g,-SC,SC)/SC*half;
+  ctx.fillStyle=g<0?C['--hot']:'#39d98a';ctx.fillRect(Math.min(bmid,bmid+gv),barY-2,Math.abs(gv),4);
+  ctx.fillStyle=C['--fg'];ctx.fillRect(bmid-0.5,barY-5,1,10);
+  const mk=(val,c)=>{const px=bmid+clamp(val,-SC,SC)/SC*half;ctx.fillStyle=c;ctx.beginPath();ctx.moveTo(px,barY-4);ctx.lineTo(px-3.5,barY-10);ctx.lineTo(px+3.5,barY-10);ctx.closePath();ctx.fill()};
+  if(S.maxBrk<-0.05)mk(S.maxBrk,C['--hot']);if(S.maxAcc>0.05)mk(S.maxAcc,'#39d98a');
+  ctx.font=`500 ${Math.max(8,w*0.05)}px ${NUM}`;ctx.fillStyle=C['--mute'];ctx.textBaseline='top';
+  ctx.textAlign='left';ctx.fillText('FRENO'+(S.maxBrk<-0.05?' '+Math.abs(S.maxBrk).toFixed(2):''),bx0,barY+5-2);
+  ctx.textAlign='right';ctx.fillText((S.maxAcc>0.05?S.maxAcc.toFixed(2)+' ':'')+'ACEL',bx1,barY+5-2);
+  // ground + bike
+  const gyy=barY-Math.max(12,h*0.13),top=y+pad+w*0.14,U=Math.min(w*0.62,(gyy-top)/0.97),mx=x+w*0.5;
+  ctx.strokeStyle=C['--line2'];ctx.beginPath();ctx.moveTo(x+pad,gyy+0.5);ctx.lineTo(x+w-pad,gyy+0.5);ctx.stroke();
+  const target=Number.isFinite(g)?clamp(-g*7,-7,7):0;pitchDisp+=(target-pitchDisp)*0.2;
+  ctx.save();ctx.translate(mx,gyy);drawSideBike(U,pitchDisp,brk);ctx.restore();
+  ctx.restore();
+}
+/* Original side-view drawing of a black 125 cc supersport, facing right (no brand marks).
+   Units: U ≈ wheelbase, origin = ground midpoint, y up. Braking pitches the body about the rear axle, acceleration about the front axle. */
+let wheelAng=0;
+function drawSideBike(U,pitch,braking){
+  const c=ctx,X=x=>x*U,Y=y=>-y*U;
+  const M=(x,y)=>c.moveTo(X(x),Y(y)),L=(x,y)=>c.lineTo(X(x),Y(y)),
+        Q=(a,b,x,y)=>c.quadraticCurveTo(X(a),Y(b),X(x),Y(y)),
+        B=(a,b,d,e,x,y)=>c.bezierCurveTo(X(a),Y(b),X(d),Y(e),X(x),Y(y));
+  const RA=[-0.5,0.215],FA=[0.53,0.215],TR=0.215,RIM=0.158;
+  const piv=pitch>=0?RA:FA,pr=pitch*D2R;
+  const T=(x,y)=>{const dx=x-piv[0],dy=y-piv[1],cs=Math.cos(-pr),sn=Math.sin(-pr);return[piv[0]+dx*cs-dy*sn,piv[1]+dx*sn+dy*cs]};
+  const edge=(a,w)=>{c.strokeStyle=`rgba(205,222,245,${a})`;c.lineWidth=Math.max(0.6,U*(w||0.004));c.stroke()};
+  const shine=(a,w)=>{c.strokeStyle=`rgba(255,255,255,${a})`;c.lineWidth=Math.max(0.7,U*(w||0.007));c.lineCap='round';c.stroke()};
+  c.lineJoin='round';c.lineCap='round';
+
+  // ground shadow
+  c.fillStyle='rgba(0,0,0,0.5)';c.beginPath();c.ellipse(0,1,U*0.72,U*0.03,0,0,Math.PI*2);c.fill();
+
+  const wheel=(ax,ay,front)=>{
+    const cx=X(ax),cy=Y(ay);
+    c.beginPath();c.arc(cx,cy,TR*U,0,Math.PI*2);c.fillStyle='#050506';c.fill();
+    c.beginPath();c.arc(cx,cy,TR*U*0.94,0,Math.PI*2);c.strokeStyle='rgba(255,255,255,0.06)';c.lineWidth=Math.max(0.6,U*0.005);c.stroke();
+    // disc
+    const dr=front?0.128:0.088;
+    c.beginPath();c.arc(cx,cy,dr*U,0,Math.PI*2);c.strokeStyle='#8c95a0';c.lineWidth=U*(front?0.03:0.022);c.stroke();
+    c.save();c.setLineDash([U*0.006,U*0.014]);c.lineDashOffset=-wheelAng*dr*U;c.beginPath();c.arc(cx,cy,dr*U,0,Math.PI*2);
+    c.strokeStyle='#3c434c';c.lineWidth=U*0.008;c.stroke();c.restore();
+    // rim + split spokes
+    c.beginPath();c.arc(cx,cy,RIM*U,0,Math.PI*2);c.strokeStyle='#23282f';c.lineWidth=U*0.02;c.stroke();
+    c.beginPath();c.arc(cx,cy,RIM*U*1.05,-2.4,-1.2);c.strokeStyle='rgba(255,255,255,0.12)';c.lineWidth=Math.max(0.6,U*0.004);c.stroke();
+    for(let i=0;i<5;i++){const a=wheelAng+i*Math.PI*2/5;
+      for(const o of[-0.13,0.13]){c.beginPath();c.moveTo(cx+Math.cos(a)*U*0.035,cy+Math.sin(a)*U*0.035);
+        c.lineTo(cx+Math.cos(a+o)*RIM*U*0.97,cy+Math.sin(a+o)*RIM*U*0.97);c.strokeStyle='#1d2127';c.lineWidth=U*0.012;c.stroke()}}
+    c.beginPath();c.arc(cx,cy,U*0.04,0,Math.PI*2);c.fillStyle='#2e343c';c.fill();
+    c.beginPath();c.arc(cx,cy,U*0.014,0,Math.PI*2);c.fillStyle='#b9c1cb';c.fill();
+    // caliper
+    const ca=front?-2.45:0.75,kx=cx+Math.cos(ca)*dr*U,ky=cy+Math.sin(ca)*dr*U;
+    c.save();c.translate(kx,ky);c.rotate(ca+Math.PI/2);c.fillStyle='#16191d';c.beginPath();
+    if(c.roundRect)c.roundRect(-U*0.035,-U*0.018,U*0.07,U*0.036,U*0.01);else c.rect(-U*0.035,-U*0.018,U*0.07,U*0.036);
+    c.fill();c.strokeStyle='rgba(205,222,245,0.2)';c.lineWidth=Math.max(0.6,U*0.004);c.stroke();c.restore();
+  };
+  wheel(RA[0],RA[1],false);wheel(FA[0],FA[1],true);
+  // mudguards
+  c.beginPath();c.arc(X(RA[0]),Y(RA[1]),(TR+0.018)*U,-2.55,-1.35);c.strokeStyle='#0c0d0f';c.lineWidth=U*0.02;c.stroke();
+  c.beginPath();c.arc(X(FA[0]),Y(FA[1]),(TR+0.016)*U,-2.3,-0.75);c.strokeStyle='#0c0d0f';c.lineWidth=U*0.022;c.stroke();
+  c.beginPath();c.arc(X(FA[0]),Y(FA[1]),(TR+0.02)*U,-2.0,-1.1);c.strokeStyle='rgba(255,255,255,0.14)';c.lineWidth=Math.max(0.6,U*0.004);c.stroke();
+
+  // swingarm (tapered) + chain
+  const P=T(-0.1,0.37),dx=RA[0]-P[0],dy=RA[1]-P[1],ln=Math.hypot(dx,dy),nx=-dy/ln,ny=dx/ln;
+  c.beginPath();M(P[0]+nx*0.034,P[1]+ny*0.034);L(RA[0]+nx*0.024,RA[1]+ny*0.024);L(RA[0]-nx*0.02,RA[1]-ny*0.02);L(P[0]-nx*0.03,P[1]-ny*0.03);c.closePath();
+  const sg=c.createLinearGradient(X(P[0]),Y(P[1]+0.04),X(P[0]),Y(P[1]-0.04));sg.addColorStop(0,'#6f7883');sg.addColorStop(0.5,'#2d333a');sg.addColorStop(1,'#15181c');
+  c.fillStyle=sg;c.fill();edge(0.15);
+  const FS=T(-0.03,0.31);
+  c.save();c.setLineDash([U*0.008,U*0.006]);c.lineDashOffset=-wheelAng*0.065*U;c.strokeStyle='#7d8691';c.lineWidth=U*0.008;
+  c.beginPath();M(FS[0],FS[1]+0.028);L(RA[0],RA[1]+0.066);M(FS[0],FS[1]-0.028);L(RA[0],RA[1]-0.066);c.stroke();c.restore();
+  c.beginPath();c.arc(X(RA[0]),Y(RA[1]),U*0.066,0,Math.PI*2);c.strokeStyle='#4b525b';c.lineWidth=U*0.008;c.stroke();
+
+  // upside-down fork: thick outer tube at top, bright stanchion near the axle
+  const FT=T(0.375,0.81),fdx=FA[0]-FT[0],fdy=FA[1]-FT[1];const k=0.62,FM=[FT[0]+fdx*k,FT[1]+fdy*k];
+  c.beginPath();M(FT[0],FT[1]);L(FM[0],FM[1]);c.strokeStyle='#1a1e23';c.lineWidth=U*0.046;c.lineCap='butt';c.stroke();
+  c.beginPath();M(FM[0],FM[1]);L(FA[0],FA[1]+0.02);c.strokeStyle='#aab3bd';c.lineWidth=U*0.028;c.stroke();
+  c.beginPath();M(FM[0]+0.006,FM[1]);L(FA[0]+0.006,FA[1]+0.03);c.strokeStyle='rgba(255,255,255,0.5)';c.lineWidth=Math.max(0.6,U*0.004);c.stroke();c.lineCap='round';
+
+  // ---- body (pitches) ----
+  c.save();c.translate(X(piv[0]),Y(piv[1]));c.rotate(pr);c.translate(-X(piv[0]),-Y(piv[1]));
+  // engine visible behind fairing
+  c.beginPath();M(-0.14,0.3);L(0.08,0.24);L(0.12,0.52);L(-0.14,0.52);c.closePath();
+  c.fillStyle='#1b1e23';c.fill();
+  c.strokeStyle='rgba(255,255,255,0.07)';c.lineWidth=Math.max(0.6,U*0.004);
+  for(let i=0;i<5;i++){c.beginPath();M(-0.12,0.34+i*0.035);L(0.02,0.32+i*0.035);c.stroke()}
+  // exhaust (under-belly)
+  c.beginPath();M(0.02,0.19);L(0.245,0.17);Q(0.278,0.145,0.245,0.118);L(0.055,0.118);Q(-0.002,0.13,0.02,0.19);c.closePath();
+  const eg=c.createLinearGradient(0,Y(0.19),0,Y(0.118));eg.addColorStop(0,'#3d444d');eg.addColorStop(0.5,'#15181c');eg.addColorStop(1,'#0a0b0d');c.fillStyle=eg;c.fill();edge(0.18);
+  c.beginPath();c.ellipse(X(0.03),Y(0.155),U*0.012,U*0.03,0,0,Math.PI*2);c.fillStyle='#050506';c.fill();c.strokeStyle='#6a727c';c.lineWidth=Math.max(0.6,U*0.005);c.stroke();
+  // main body silhouette
+  c.beginPath();M(-0.705,0.745);
+  Q(-0.56,0.738,-0.42,0.702);Q(-0.39,0.718,-0.35,0.702);L(-0.2,0.667);Q(-0.12,0.66,-0.07,0.7);
+  Q(0.04,0.8,0.16,0.806);Q(0.25,0.8,0.3,0.782);L(0.345,0.815);Q(0.4,0.9,0.455,0.925);
+  Q(0.53,0.82,0.6,0.735);L(0.688,0.655);Q(0.662,0.59,0.6,0.565);Q(0.5,0.52,0.452,0.43);
+  Q(0.4,0.3,0.34,0.228);Q(0.2,0.19,0.06,0.2);Q(0,0.21,-0.02,0.26);L(0.03,0.5);L(-0.12,0.52);
+  Q(-0.35,0.535,-0.5,0.6);L(-0.662,0.692);c.closePath();
+  const bg=c.createLinearGradient(0,Y(0.93),0,Y(0.2));
+  bg.addColorStop(0,'#343a44');bg.addColorStop(0.18,'#0d0f12');bg.addColorStop(0.45,'#181b20');bg.addColorStop(0.62,'#07080a');bg.addColorStop(1,'#1a1d22');
+  c.fillStyle=bg;c.fill();edge(0.24);
+  // panel lines, vents, accent stripe
+  c.beginPath();M(0.06,0.29);Q(0.3,0.4,0.5,0.62);c.strokeStyle='rgba(122,184,255,0.4)';c.lineWidth=Math.max(0.7,U*0.006);c.stroke();
+  c.beginPath();M(0.29,0.62);L(0.45,0.665);L(0.4,0.55);c.closePath();c.fillStyle='#020203';c.fill();edge(0.14);
+  c.beginPath();M(0.12,0.4);L(0.25,0.445);L(0.21,0.35);c.closePath();c.fillStyle='#020203';c.fill();edge(0.12);
+  c.beginPath();M(-0.2,0.6);Q(-0.45,0.64,-0.64,0.715);c.strokeStyle='rgba(255,255,255,0.08)';c.lineWidth=Math.max(0.6,U*0.004);c.stroke();
+  c.beginPath();M(-0.03,0.53);Q(0.1,0.56,0.2,0.66);c.strokeStyle='rgba(0,0,0,0.6)';c.lineWidth=Math.max(0.6,U*0.005);c.stroke();
+  // seat
+  c.beginPath();M(-0.37,0.705);L(-0.2,0.669);Q(-0.12,0.662,-0.078,0.697);c.strokeStyle='#23272d';c.lineWidth=U*0.018;c.stroke();
+  // tank & fairing highlights
+  c.beginPath();M(-0.03,0.755);Q(0.1,0.815,0.25,0.792);shine(0.26,0.008);
+  c.beginPath();M(0.48,0.87);Q(0.54,0.8,0.6,0.73);shine(0.16,0.006);
+  c.beginPath();M(-0.66,0.735);Q(-0.55,0.73,-0.44,0.705);shine(0.2,0.006);
+  // windscreen
+  c.beginPath();M(0.345,0.815);Q(0.4,0.9,0.455,0.925);L(0.472,0.88);Q(0.41,0.855,0.372,0.795);c.closePath();
+  c.fillStyle='rgba(78,104,132,0.6)';c.fill();
+  // headlight
+  c.save();c.shadowColor='#cfe4ff';c.shadowBlur=U*0.05;
+  c.beginPath();M(0.598,0.663);L(0.678,0.664);L(0.64,0.636);c.closePath();c.fillStyle='#e4f0ff';c.fill();c.restore();
+  // tail light
+  c.save();c.shadowColor='#ff1a1a';c.shadowBlur=U*(braking?0.14:0.05);
+  c.beginPath();M(-0.703,0.745);L(-0.66,0.738);L(-0.668,0.72);c.closePath();c.fillStyle=braking?'#ff5a4a':'#d81c1c';c.fill();c.restore();
+  // tail tidy + plate + indicator
+  c.beginPath();M(-0.6,0.665);L(-0.665,0.56);c.strokeStyle='#121418';c.lineWidth=U*0.012;c.stroke();
+  c.beginPath();M(-0.672,0.585);L(-0.66,0.505);c.strokeStyle='#c4cad1';c.lineWidth=U*0.01;c.stroke();
+  c.beginPath();c.ellipse(X(-0.645),Y(0.6),U*0.016,U*0.008,0,0,Math.PI*2);c.fillStyle='#ff9f1a';c.fill();
+  // clip-on + grip, mirror
+  c.beginPath();M(0.35,0.8);L(0.285,0.785);c.strokeStyle='#0b0c0e';c.lineWidth=U*0.022;c.stroke();
+  c.beginPath();M(0.42,0.83);L(0.448,0.875);c.strokeStyle='#15181c';c.lineWidth=U*0.01;c.stroke();
+  c.beginPath();c.ellipse(X(0.46),Y(0.885),U*0.038,U*0.019,-0.15,0,Math.PI*2);c.fillStyle='#101216';c.fill();edge(0.22);
+  // rear-sets
+  c.beginPath();M(-0.1,0.47);L(-0.06,0.47);L(-0.1,0.37);L(-0.145,0.37);c.closePath();
+  const ag=c.createLinearGradient(X(-0.145),0,X(-0.06),0);ag.addColorStop(0,'#5d6570');ag.addColorStop(0.5,'#b3bcc6');ag.addColorStop(1,'#4c535c');c.fillStyle=ag;c.fill();
+  c.beginPath();c.arc(X(-0.122),Y(0.405),U*0.013,0,Math.PI*2);c.fillStyle='#1b1e22';c.fill();
+  c.beginPath();c.arc(X(-0.31),Y(0.49),U*0.01,0,Math.PI*2);c.fillStyle='#2b3037';c.fill();
+  c.restore();
+}
+
+/* ---------- DOM ---------- */
+const E={};['maxL','maxR','m5L','m5R','bMaxL','bMaxR','b5L','b5R','spd','gLat','gLon','gLonK','zName','zPrev','zNow','zDelta','chSensor','chGps','chCal','zCount'].forEach(k=>E[k]=$(k));
+const side=v=>Math.abs(v)<1?'':(v>0?' D':' I');
+function setBar(el,val){el.style.width=clamp(val/65*100,0,100)+'%';el.classList.toggle('hot',val>=45)}
+function updDom(){
+  E.maxL.textContent=Math.round(S.maxL);E.maxR.textContent=Math.round(S.maxR);
+  E.m5L.textContent=Math.round(S.m5L);E.m5R.textContent=Math.round(S.m5R);
+  setBar(E.bMaxL,S.maxL);setBar(E.bMaxR,S.maxR);setBar(E.b5L,S.m5L);setBar(E.b5R,S.m5R);
+  E.spd.textContent=S.speed==null?'—':Math.round(S.speed*3.6);
+  E.gLat.textContent=Math.abs(S.gLat).toFixed(2)+(Math.abs(S.gLat)>=0.05?(S.gLat>0?' D':' I'):'');
+  E.gLon.textContent=(S.gLon>=0?'+':'')+S.gLon.toFixed(2);E.gLonK.textContent=S.gLon<-0.08?'FRENADA':S.gLon>0.08?'ACELERA':'G LON';
+  E.zName.textContent=S.zoneKey?S.zoneName:'—';
+  E.zNow.textContent=S.zoneKey?Math.round(Math.abs(S.pass))+'°'+side(S.pass):'—';
+  const dz=E.zDelta;
+  if(S.prev){E.zPrev.textContent=Math.round(Math.abs(S.prev.m))+'°'+side(S.prev.m);
+    const d=Math.round(Math.abs(S.pass)-Math.abs(S.prev.m));dz.textContent=(d>0?'+':'')+d+'°';dz.className='zdelta '+(d>0?'up':d<0?'down':'')}
+  else{E.zPrev.textContent=S.zoneKey?'NUEVA':'—';dz.textContent='—';dz.className='zdelta'}
+}
+function updChips(){
+  const cs=E.chSensor;
+  if(S.mode==='demo'){cs.textContent='DEMO';cs.className='chip warn'}
+  else if(F.map<0&&F.haveGyro){cs.textContent='APRENDIENDO GIRO';cs.className='chip warn'}
+  else{cs.textContent=F.haveGyro?'IMU OK':'SIN GIRÓSCOPO';cs.className='chip '+(F.haveGyro?'ok':'warn')}
+  const g=E.chGps;
+  if(S.mode==='demo'){g.textContent='GPS DEMO';g.className='chip'}
+  else if(S.gps){g.textContent='GPS OK';g.className='chip ok'}else{g.textContent=gpsId==null?'GPS —':'GPS BUSCANDO';g.className='chip warn'}
+  const c=E.chCal;
+  if(S.mode==='demo'){c.textContent='SIMULACIÓN';c.className='chip'}
+  else if(S.calibrated){c.textContent='CALIBRADO · '+(S.mountQuad%2?'HORIZONTAL':'VERTICAL');c.className='chip ok'}
+  else{c.textContent='SIN CALIBRAR';c.className='chip bad'}
+  E.zCount.textContent=Object.keys(cells).length;
+}
+let tt=null;function toast(t){const el=$('toast');el.textContent=t;el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),2600)}
+
+/* ---------- controls ---------- */
+$('bStart').onclick=startSensors;
+$('bDemo').onclick=()=>{$('veil').hidden=true;if(S.mode==='demo'){resetMax()}};
+$('bMenu').onclick=()=>{updChips();$('veil').hidden=false};
+$('bReset').onclick=()=>{resetMax();toast('Máximos a cero')};
+$('bCal').onclick=()=>{if(S.mode!=='live'){toast('Activa los sensores para calibrar');return}calibrate(true)};
+const invBtn=$('bInv');const setInvLbl=()=>invBtn.textContent=S.invert?'INVERTIDO':'NORMAL';setInvLbl();
+invBtn.onclick=()=>{S.invert=!S.invert;store.set('lp_inv',S.invert);setInvLbl();resetMax()};
+const ROTS=[null,0,90,180,-90],ROTL=['AUTO','0°','90°','180°','−90°'];let ri=0;
+$('bRot').onclick=e=>{ri=(ri+1)%ROTS.length;S.manualRot=ROTS[ri];e.currentTarget.textContent=ROTL[ri];applyLayout()};
+$('bClr').onclick=()=>{cells={};store.set('lp_cells',{});S.prev=null;updChips();toast('Zonas borradas')};
+
+/* ---------- loop ---------- */
+let lastT=performance.now(),lastDom=0;
+function frame(t){
+  requestAnimationFrame(frame);
+  try{
+  const dt=clamp((t-lastT)/1000,0,0.1);lastT=t;
+  let v;
+  if(S.mode==='demo'){v=demoStep(dt);S.gLat+=(Math.tan(v*D2R)-S.gLat)*Math.min(1,dt*8)}
+  else{
+    v=F.gotOri?wrap(F.theta)*(S.invert?-1:1):0;
+    let gl;
+    if(S.speed!=null&&S.speed>2&&F.yaw!=null&&F.map>=0)gl=-(S.speed*F.yaw*D2R)/9.81*(S.invert?-1:1);
+    else gl=Math.tan(clamp(v,-70,70)*D2R);
+    S.gLat+=(clamp(gl,-2,2)-S.gLat)*Math.min(1,dt*6);
+    const gl2=F.haveAcc?F.accSign*F.accRaw-F.accBias:S.gpsLon;
+    S.gLon+=(clamp(gl2,-1.6,1.6)-S.gLon)*Math.min(1,dt*10);
+  }
+  const fin=(x,d)=>Number.isFinite(x)?x:d;
+  v=fin(v,0);S.gLon=fin(S.gLon,0);S.gLat=fin(S.gLat,0);S.disp=fin(S.disp,0);pitchDisp=fin(pitchDisp,0);wheelAng=fin(wheelAng,0)%(Math.PI*2);
+  S.lean=v;S.disp+=(v-S.disp)*Math.min(1,dt*18);
+  track(v,t);
+  wheelAng+=((S.speed||0)/0.3)*dt;
+  if(S.gLon<S.maxBrk)S.maxBrk=S.gLon;if(S.gLon>S.maxAcc)S.maxAcc=S.gLon;
+  draw();
+  if(t-lastDom>100){lastDom=t;updDom()}
+  }catch(err){if(!frame.warned){frame.warned=true;console.warn('Lean Pro: fotograma omitido',err)}}
+}
+applyLayout();updChips();
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{});
+requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>
