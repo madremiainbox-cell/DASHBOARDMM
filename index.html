@@ -269,7 +269,7 @@ table.laps{width:100%;border-collapse:collapse;font-family:var(--f-num);font-var
       </div>
       <div id="msg" hidden></div>
       <a id="bOut" class="outlink" href="#" target="_blank" rel="noopener" hidden>ABRIR FUERA DEL VISOR ↗</a>
-      <div class="opt"><span>Aviso de voz: grados máximos al salir de cada curva de más de 30°</span><button id="bSnd2" type="button">ACTIVADO</button></div>
+      <div class="opt"><span>Aviso de voz: grados máximos al salir de cada curva de más de 30°</span><span style="display:flex;gap:6px"><button id="bSndTest" type="button">PROBAR</button><button id="bSnd2" type="button">ACTIVADO</button></span></div>
       <div class="opt"><span>Sentido de inclinación</span><button id="bInv" type="button">NORMAL</button></div>
       <div class="opt"><span>Orientación de pantalla</span><button id="bRot" type="button">AUTO</button></div>
       <div class="opt"><span>Zonas GPS guardadas: <b id="zCount">0</b></span><button id="bClr" type="button">BORRAR</button></div>
@@ -1537,8 +1537,23 @@ const SND={on:store.get('lp_snd',true),armed:false,peak:0,voice:null,unlocked:fa
 const HAS_TTS=typeof window.speechSynthesis!=='undefined'&&typeof window.SpeechSynthesisUtterance!=='undefined';
 function pickVoice(){try{const vs=speechSynthesis.getVoices();SND.voice=vs.find(v=>/^es[-_]ES/i.test(v.lang))||vs.find(v=>/^es/i.test(v.lang))||null}catch(e){}}
 if(HAS_TTS){pickVoice();try{speechSynthesis.addEventListener('voiceschanged',pickVoice)}catch(e){}}
-function unlockAudio(){if(SND.unlocked||!HAS_TTS)return;try{const u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u);SND.unlocked=true}catch(e){}}
-function say(t){if(!SND.on||!HAS_TTS)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='es-ES';if(SND.voice)u.voice=SND.voice;u.rate=1.1;u.volume=1;speechSynthesis.speak(u)}catch(e){}}
+const UTT=[];// keep references: Safari can drop utterances that get garbage-collected
+function mkUtt(t){const u=new SpeechSynthesisUtterance(t);u.lang='es-ES';if(SND.voice)u.voice=SND.voice;u.rate=1.05;u.pitch=1;u.volume=1;UTT.push(u);if(UTT.length>6)UTT.shift();return u}
+function audioSession(){try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}}
+/* iOS only enables speech after an audible utterance started inside a tap. */
+function unlockAudio(){
+  if(SND.unlocked||!HAS_TTS||!SND.on)return;
+  audioSession();
+  try{pickVoice();const ss=speechSynthesis;if(ss.paused)ss.resume();ss.speak(mkUtt('Voz activada'));SND.unlocked=true}catch(e){}
+}
+function say(t){
+  if(!SND.on||!HAS_TTS)return;
+  try{const ss=speechSynthesis;if(ss.paused)ss.resume();
+    const go=()=>{try{ss.speak(mkUtt(t))}catch(e){}};
+    // cancel()+speak() in the same tick is silently dropped by Safari: wait a moment after cancelling
+    if(ss.speaking||ss.pending){ss.cancel();setTimeout(go,120)}else go();
+  }catch(e){}
+}
 function feedVoice(lean){
   const a=Math.abs(lean);
   if(!SND.armed){if(a>=30){SND.armed=true;SND.peak=a}return}
@@ -1546,9 +1561,16 @@ function feedVoice(lean){
   if(a<=12){SND.armed=false;say(String(Math.round(SND.peak)))}
 }
 function setSnd(on){SND.on=on;store.set('lp_snd',on);$('bSnd').setAttribute('aria-pressed',String(on));$('bSnd2').textContent=on?'ACTIVADO':'SILENCIADO';if(!on&&HAS_TTS){try{speechSynthesis.cancel()}catch(e){}}}
-$('bSnd').onclick=()=>{unlockAudio();setSnd(!SND.on);if(!HAS_TTS)toast('Este navegador no tiene voz');else toast(SND.on?'Aviso de voz activado':'Aviso de voz silenciado')};
-$('bSnd2').onclick=()=>{unlockAudio();setSnd(!SND.on)};
-addEventListener('pointerdown',unlockAudio,{once:true,capture:true});
+function toggleSnd(){
+  setSnd(!SND.on);
+  if(!HAS_TTS){toast('Este navegador no tiene voz');return}
+  if(SND.on){audioSession();try{speechSynthesis.cancel()}catch(e){}try{speechSynthesis.speak(mkUtt('Voz activada'))}catch(e){}SND.unlocked=true;toast('Aviso de voz activado')}
+  else toast('Aviso de voz silenciado');
+}
+$('bSnd').onclick=toggleSnd;$('bSnd2').onclick=toggleSnd;
+$('bSndTest').onclick=()=>{if(!HAS_TTS){toast('Este navegador no tiene voz');return}if(!SND.on)setSnd(true);audioSession();try{speechSynthesis.cancel()}catch(e){}
+  try{speechSynthesis.speak(mkUtt('cuarenta y cinco'))}catch(e){}SND.unlocked=true;toast('Deberías oír «cuarenta y cinco»')};
+['touchend','click'].forEach(ev=>addEventListener(ev,unlockAudio,{capture:true,passive:true}));
 
 /* ---------- controls ---------- */
 $('bStart').onclick=()=>{unlockAudio();startSensors()};
