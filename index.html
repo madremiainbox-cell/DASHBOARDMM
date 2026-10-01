@@ -118,6 +118,11 @@ button:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
 .ctrl button.arm{background:var(--warm);border-color:var(--warm);color:var(--bg)}
 button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 button.icon{min-height:30px;height:30px;min-width:34px;padding:0 8px;font-size:15px;letter-spacing:0}
+button.snd{display:inline-flex;align-items:center;justify-content:center;color:var(--accent2)}
+button.snd .x{display:none}
+button.snd[aria-pressed="false"]{color:var(--mute)}
+button.snd[aria-pressed="false"] .w{display:none}
+button.snd[aria-pressed="false"] .x{display:inline}
 button.danger{color:var(--hot)}
 button.danger.arm{background:var(--hot);color:#fff;border-color:var(--hot)}
 
@@ -199,6 +204,7 @@ table.laps{width:100%;border-collapse:collapse;font-family:var(--f-num);font-var
     <div class="chips">
       <button class="icon" id="bMenu" type="button" aria-label="Menú">≡</button>
       <span class="mode">LEAN<i>·</i>PRO</span>
+      <button class="icon snd" id="bSnd" type="button" aria-label="Aviso de voz" aria-pressed="true"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="w" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="x" d="M16 9l5 6M21 9l-5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       <span class="segc" role="group" aria-label="Modo"><button id="mRuta" type="button" aria-pressed="true">RUTA</button><button id="mCirc" type="button" aria-pressed="false">CIRCUITO</button></span>
       <span class="chip rec" id="chRec" hidden>● REC 0:00</span>
       <span class="chip warn" id="chSensor">DEMO</span>
@@ -206,8 +212,6 @@ table.laps{width:100%;border-collapse:collapse;font-family:var(--f-num);font-var
       <span class="chip" id="chCal">SIN CALIBRAR</span>
     </div>
     <div class="stats">
-      <div class="stat"><span class="k">G LAT</span><span class="v" id="gLat">0.00</span></div>
-      <div class="stat"><span class="k" id="gLonK">G LON</span><span class="v" id="gLon">0.00</span></div>
       <div class="stat speed"><span class="k">VELOCIDAD</span><span class="v"><span id="spd">—</span><small>km/h</small></span></div>
     </div>
   </header>
@@ -265,6 +269,7 @@ table.laps{width:100%;border-collapse:collapse;font-family:var(--f-num);font-var
       </div>
       <div id="msg" hidden></div>
       <a id="bOut" class="outlink" href="#" target="_blank" rel="noopener" hidden>ABRIR FUERA DEL VISOR ↗</a>
+      <div class="opt"><span>Aviso de voz: grados máximos al salir de cada curva de más de 30°</span><button id="bSnd2" type="button">ACTIVADO</button></div>
       <div class="opt"><span>Sentido de inclinación</span><button id="bInv" type="button">NORMAL</button></div>
       <div class="opt"><span>Orientación de pantalla</span><button id="bRot" type="button">AUTO</button></div>
       <div class="opt"><span>Zonas GPS guardadas: <b id="zCount">0</b></span><button id="bClr" type="button">BORRAR</button></div>
@@ -1045,7 +1050,7 @@ const NUM='"Saira Semi Condensed","Arial Narrow",sans-serif';
 function leanColor(a){a=Math.abs(a);return a>=45?C['--hot']:a>=30?C['--accent2']:C['--accent']}
 
 /* Lean gauge: arc scale, markers, needle, big live number and the rear-view bike. (cx,gy) = contact patch, R = arc radius. */
-function drawGauge(cx,gy,R){
+function drawGauge(cx,gy,R,hh){
   const LIM=65,c=ctx;
   const pt=(deg,r)=>[cx+r*Math.sin(deg*D2R),gy-r*Math.cos(deg*D2R)];
   const A=deg=>-Math.PI/2+deg*D2R;
@@ -1085,6 +1090,16 @@ function drawGauge(cx,gy,R){
     c.fillStyle=hot?C['--hot']:leanColor(S.disp);c.beginPath();c.moveTo(x0+dir*h*0.9,y0);c.lineTo(x0-dir*h*0.5,y0-h);c.lineTo(x0-dir*h*0.5,y0+h);c.closePath();c.fill()}
   c.fillStyle='rgba(0,0,0,0.55)';c.beginPath();c.ellipse(cx+Math.sin(v*D2R)*R*0.05,gy+2,R*0.13,R*0.025,0,0,Math.PI*2);c.fill();
   c.save();c.translate(cx,gy);c.rotate(v*D2R);drawBike(R*0.55);c.restore();
+  // lateral G, small, by the bike
+  const gl=S.gLat,gtxt=Math.abs(gl).toFixed(2)+' g',fsz=Math.max(11,R*0.075);
+  const below=hh!=null&&hh-gy>fsz*2.6;
+  c.save();c.textBaseline='alphabetic';
+  if(below){c.textAlign='center';c.font=`600 ${fsz*0.72}px ${NUM}`;c.fillStyle=C['--mute'];c.fillText('G LATERAL',cx,gy+fsz*1.15);
+    c.font=`700 ${fsz*1.15}px ${NUM}`;c.fillStyle=C['--fg'];c.fillText(gtxt+(Math.abs(gl)>=0.05?(gl>0?' ▸':' ◂'):''),cx,gy+fsz*2.35)}
+  else{const sd=v>0?-1:1,xx=cx+sd*R*0.3;c.textAlign=sd>0?'left':'right';
+    c.font=`600 ${fsz*0.72}px ${NUM}`;c.fillStyle=C['--mute'];c.fillText('G LAT',xx,gy-fsz*1.5);
+    c.font=`700 ${fsz*1.1}px ${NUM}`;c.fillStyle=C['--fg'];c.fillText(gtxt,xx,gy-fsz*0.35)}
+  c.restore();
 }
 
 /* Curve card: shown 3 s at the exit of each >30° curve inside a favourite segment, compared with the same curve on the best pass. */
@@ -1113,25 +1128,44 @@ function drawCurvePop(cx,y,w){
   col(x+w*0.52,'VEL. DE PASO',cu.v==null?'—':String(cu.v),'km/h',cu.dv,cu.dv!=null?fmtD(cu.dv,''):'');
   c.restore();
 }
+/* Vertical longitudinal-G bar: zero in the middle, braking fills upward in red, acceleration fills downward in green.
+   (x = bar left edge, top/bottom = extent, bw = bar width, fs = label size) */
+const GBAR_MAX=1.0;
+function drawGBar(x,top,bottom,bw,fs){
+  const c=ctx,mid=(top+bottom)/2,half=(bottom-top)/2,g=S.gLon;
+  rr(c,x,top,bw,bottom-top,bw/2);c.fillStyle=C['--line'];c.fill();
+  for(const f of[0.25,0.5,0.75,1]){for(const s of[-1,1]){const y=mid+s*f*half;c.fillStyle=C['--line2'];c.fillRect(x-3,y-0.5,3,1)}}
+  const fl=clamp(Math.abs(g)/GBAR_MAX,0,1)*half,brk=g<0,col=brk?C['--hot']:C['--good'];
+  if(fl>0.5){c.save();c.shadowColor=col;c.shadowBlur=fl>half*0.6?10:4;rr(c,x,brk?mid-fl:mid,bw,fl,bw/2);c.fillStyle=col;c.fill();c.restore()}
+  c.fillStyle=C['--fg'];c.fillRect(x-4,mid-1,bw+8,2);
+  const mk=(val,colr)=>{const yy=val<0?mid-clamp(-val/GBAR_MAX,0,1)*half:mid+clamp(val/GBAR_MAX,0,1)*half;
+    c.fillStyle=colr;c.beginPath();c.moveTo(x-4,yy);c.lineTo(x-10,yy-4);c.lineTo(x-10,yy+4);c.closePath();c.fill()};
+  if(S.maxBrk<-0.05)mk(S.maxBrk,C['--hot']);if(S.maxAcc>0.05)mk(S.maxAcc,C['--good']);
+  c.textAlign='right';c.textBaseline='middle';
+  c.font=`600 ${fs*0.75}px ${NUM}`;c.fillStyle=C['--mute'];
+  c.textAlign='right';c.fillText('FRENO',x+bw+2,top-fs*0.85);c.fillText('ACEL',x+bw+2,bottom+fs*0.85);
+  if(Math.abs(g)>=0.03){const ty=clamp(brk?mid-fl:mid+fl,top+fs*0.6,bottom-fs*0.6);
+    c.font=`700 ${fs}px ${NUM}`;c.fillStyle=col;c.save();c.shadowColor='rgba(0,0,0,0.9)';c.shadowBlur=6;c.fillText(Math.abs(g).toFixed(2)+' g',x-12,ty);c.restore()}
+}
 function draw(){
   if(cv.clientWidth!==cw||cv.clientHeight!==ch)sizeCanvas();
   const w=cw,h=ch;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
-  const bw=clamp(Math.min(w*0.4,h*0.6),116,220),bh=Math.round(bw*0.74),bx=w-bw-4,by=h-bh-4;
-  const inBox=(x,y)=>x>bx-6&&y>by-6;
-  const geo=R=>{const gy=clamp(h/2+R*0.6,R*1.26,h-6),lw=Math.max(5,R*0.045);return{gy,lw}};
-  let R=Math.max(40,Math.min(w*0.44,(h-8)/1.3)),cx=w/2;
-  const hits=(R,cxx)=>{const{gy,lw}=geo(R);
-    if(cxx-R*1.08<0)return true;
-    for(let t=15;t<=70;t+=5){for(const r of[R-lw,R+lw+R*0.2]){if(inBox(cxx+r*Math.sin(t*D2R),gy-r*Math.cos(t*D2R)))return true}}
-    for(let t=20;t<=90;t+=5){const r=R*0.6;if(inBox(cxx+r*Math.sin(t*D2R),gy-r*Math.cos(t*D2R)))return true}
-    return false};
-  outer:for(let k=0;k<16;k++){for(const sh of[0,0.04,0.08,0.12,0.16]){const c=w/2-sh*w;if(!hits(R,c)){cx=c;break outer}}R*=0.95}
-  const gy=geo(R).gy;
+  const COL=64,R0=Math.max(40,Math.min(w*0.44,(h-8)/1.3));
+  const geo=R=>clamp(h/2+R*0.6,R*1.26,h-6);
+  let R,cx,gy,bx,bTop,bBot;
+  const Ra=Math.min(R0,(w-COL)/2.2);
+  if(Ra>=R0*0.9){ // room for a full-height bar column on the right
+    R=Ra;cx=1.1*R+((w-COL)-2.2*R)/2;gy=geo(R);bx=w-20;bTop=Math.max(18,gy-R*1.25);bBot=gy-4;
+    if(h-gy>R*0.5)bBot=Math.min(h-20,gy+R*0.45);
+  }else{ // narrow: gauge keeps its size, bar sits in the free corner under the arc's end
+    R=R0;cx=w/2;gy=geo(R);bx=w-20;bTop=gy-R*0.22;bBot=h-20;
+    if(bBot-bTop<120){R=Ra;cx=1.1*R+((w-COL)-2.2*R)/2;gy=geo(R);bTop=Math.max(18,gy-R*1.25);bBot=gy-4}
+  }
   const rg=ctx.createLinearGradient(0,gy,0,h);rg.addColorStop(0,'rgba(43,125,233,0.10)');rg.addColorStop(1,'rgba(43,125,233,0)');
   ctx.fillStyle=rg;ctx.fillRect(0,gy,w,h-gy);
   ctx.strokeStyle=C['--line2'];ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,gy+0.5);ctx.lineTo(w,gy+0.5);ctx.stroke();
-  drawGauge(cx,gy,R);
-  drawInset(bx,by,bw,bh);
+  drawGauge(cx,gy,R,h);
+  drawGBar(bx,bTop,bBot,10,13);
   drawCurvePop(w/2,4,Math.min(w-8,350));
 }
 
@@ -1170,8 +1204,8 @@ function drawRecFrame(dt){
     let gR,gx,gyy,iw,ix,iy,sx,sy;
     if(land){gR=185*u;gx=40*u+gR*1.12;gyy=H-34*u;iw=270*u;ix=W-iw-30*u;iy=H-iw*0.74-30*u;sx=W*0.53;sy=H-58*u}
     else{gR=250*u;gx=W/2;gyy=H-250*u;iw=250*u;ix=W-iw-28*u;iy=H-iw*0.74-28*u;sx=40*u;sy=H-60*u}
-    c.globalAlpha=0.94;drawInset(ix,iy,iw,iw*0.74);c.globalAlpha=1;
-    drawGauge(gx,gyy,gR);
+    drawGBar(W-48*u,land?H*0.3:H*0.42,H-70*u,14*u,22*u);
+    drawGauge(gx,gyy,gR,H);
     c.shadowColor='rgba(0,0,0,0.8)';c.shadowBlur=8*u;
     c.textBaseline='alphabetic';c.fillStyle='#fff';c.textAlign=land?'center':'left';
     const sp=S.speed==null?'—':String(Math.round(S.speed*3.6));
@@ -1427,7 +1461,7 @@ function startSensors(){
 }
 
 /* ---------- DOM ---------- */
-const E={};['maxL','maxR','m5L','m5R','bMaxL','bMaxR','b5L','b5R','spd','gLat','gLon','gLonK','zName','zPrev','zNow','zDelta','chSensor','chGps','chCal','chRec','zCount','rCount',
+const E={};['maxL','maxR','m5L','m5R','bMaxL','bMaxR','b5L','b5R','spd','zName','zPrev','zNow','zDelta','chSensor','chGps','chCal','chRec','zCount','rCount',
   'segLine','segName','segT','segBest','segRes','lapN','lapT','lapD','lapBest','lapLast','s0','s1','s2','bMark','bRec','pRoute','pCirc'].forEach(k=>E[k]=$(k));
 function setBar(el,val){el.style.width=clamp(val/65*100,0,100)+'%';el.classList.toggle('hot',val>=45)}
 function updDom(){
@@ -1435,8 +1469,6 @@ function updDom(){
   E.m5L.textContent=Math.round(S.m5L);E.m5R.textContent=Math.round(S.m5R);
   setBar(E.bMaxL,S.maxL);setBar(E.bMaxR,S.maxR);setBar(E.b5L,S.m5L);setBar(E.b5R,S.m5R);
   E.spd.textContent=S.speed==null?'—':Math.round(S.speed*3.6);
-  E.gLat.textContent=Math.abs(S.gLat).toFixed(2)+(Math.abs(S.gLat)>=0.05?(S.gLat>0?' D':' I'):'');
-  E.gLon.textContent=(S.gLon>=0?'+':'')+S.gLon.toFixed(2);E.gLonK.textContent=S.gLon<-0.08?'FRENADA':S.gLon>0.08?'ACELERA':'G LON';
   const now=nowMs();
   if(S.ride==='ruta'){
     E.zName.textContent=S.zoneKey?S.zoneName:'—';
@@ -1500,9 +1532,27 @@ function setRideMode(m){
 }
 let tt=null;function toast(t){const el=$('toast');el.textContent=t;el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),2800)}
 
+/* ---------- voice: max lean of each >30° curve, spoken once the bike is back to 12° or less ---------- */
+const SND={on:store.get('lp_snd',true),armed:false,peak:0,voice:null,unlocked:false};
+const HAS_TTS=typeof window.speechSynthesis!=='undefined'&&typeof window.SpeechSynthesisUtterance!=='undefined';
+function pickVoice(){try{const vs=speechSynthesis.getVoices();SND.voice=vs.find(v=>/^es[-_]ES/i.test(v.lang))||vs.find(v=>/^es/i.test(v.lang))||null}catch(e){}}
+if(HAS_TTS){pickVoice();try{speechSynthesis.addEventListener('voiceschanged',pickVoice)}catch(e){}}
+function unlockAudio(){if(SND.unlocked||!HAS_TTS)return;try{const u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u);SND.unlocked=true}catch(e){}}
+function say(t){if(!SND.on||!HAS_TTS)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='es-ES';if(SND.voice)u.voice=SND.voice;u.rate=1.1;u.volume=1;speechSynthesis.speak(u)}catch(e){}}
+function feedVoice(lean){
+  const a=Math.abs(lean);
+  if(!SND.armed){if(a>=30){SND.armed=true;SND.peak=a}return}
+  if(a>SND.peak)SND.peak=a;
+  if(a<=12){SND.armed=false;say(String(Math.round(SND.peak)))}
+}
+function setSnd(on){SND.on=on;store.set('lp_snd',on);$('bSnd').setAttribute('aria-pressed',String(on));$('bSnd2').textContent=on?'ACTIVADO':'SILENCIADO';if(!on&&HAS_TTS){try{speechSynthesis.cancel()}catch(e){}}}
+$('bSnd').onclick=()=>{unlockAudio();setSnd(!SND.on);if(!HAS_TTS)toast('Este navegador no tiene voz');else toast(SND.on?'Aviso de voz activado':'Aviso de voz silenciado')};
+$('bSnd2').onclick=()=>{unlockAudio();setSnd(!SND.on)};
+addEventListener('pointerdown',unlockAudio,{once:true,capture:true});
+
 /* ---------- controls ---------- */
-$('bStart').onclick=startSensors;
-$('bDemo').onclick=()=>{$('veil').hidden=true;if(S.mode==='demo')resetMax()};
+$('bStart').onclick=()=>{unlockAudio();startSensors()};
+$('bDemo').onclick=()=>{unlockAudio();$('veil').hidden=true;if(S.mode==='demo')resetMax()};
 $('bMenu').onclick=()=>{updChips();$('veil').hidden=false};
 $('bReset').onclick=()=>{resetMax();toast('Máximos a cero')};
 $('bCal').onclick=()=>{if(S.mode!=='live'){toast('Activa los sensores para calibrar');return}calibrate(true)};
@@ -1571,7 +1621,7 @@ function frame(t){
     track(v,t);
     wheelAng+=((S.speed||0)/0.3)*dt;
     if(S.gLon<S.maxBrk)S.maxBrk=S.gLon;if(S.gLon>S.maxAcc)S.maxAcc=S.gLon;
-    feedRide(v,S.gLon,S.speed);feedTiming(v,S.speed,dt);
+    feedRide(v,S.gLon,S.speed);feedTiming(v,S.speed,dt);feedVoice(v);
     draw();
     if(REC.on&&t-REC.last>=32){const rdt=REC.last?(t-REC.last)/1000:0;REC.last=t;drawRecFrame(rdt)}
     if(t-lastDom>100){lastDom=t;updDom()}
@@ -1581,7 +1631,7 @@ buildExamples();
 initDemo();
 $('mRuta').setAttribute('aria-pressed',String(S.ride==='ruta'));$('mCirc').setAttribute('aria-pressed',String(S.ride==='circuito'));
 E.pRoute.hidden=S.ride!=='ruta';E.pCirc.hidden=S.ride!=='circuito';
-applyLayout();updChips();updMark();updRecUi();
+applyLayout();updChips();updMark();updRecUi();setSnd(SND.on);
 requestAnimationFrame(frame);
 
 })();
